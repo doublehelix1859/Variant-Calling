@@ -1,0 +1,699 @@
+##############################################
+#######Post-variant-calling-pipeline##########
+##############################################
+
+#pipeline for VCF comparison
+
+########################
+##STEP1 - VCF to Table##
+
+#H1N1pdm
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=40GB
+#SBATCH --job-name=h1VariantToTable
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h1VariantToTable.err
+
+module purge
+module load gatk/3.8-0
+
+cd /scratch/mk6134/varcall/h1n1/comparison/raw-vcf
+
+for a in {1..142};do
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in snvs indels;do
+java -jar /share/apps/gatk/3.8-0/GenomeAnalysisTK.jar -R H1N1_ref.fa -T VariantsToTable -F CHROM -F POS -F REF -F ALT -F QUAL -F DP -F AF -V $a.${b}-${c}.${d}.vcf  	-o $a.${b}.${c}.${d}.all.table;
+java -jar /share/apps/gatk/3.8-0/GenomeAnalysisTK.jar -R H1N1_ref.fa -T VariantsToTable -F CHROM -F POS -F REF -F ALT -F QUAL -F DP -F AF -V $a.${b}-${c}.${d}.${e}.vcf   -o $a.${b}.${c}.${d}.${e}.table;
+mkdir /scratch/mk6134/varcall/h1n1/comparison/final-table
+cp ./$a.${b}.${c}.${d}.all.table /scratch/mk6134/varcall/h1n1/comparison/final-table
+cp ./$a.${b}.${c}.${d}.${e}.table /scratch/mk6134/varcall/h1n1/comparison/final-table
+done;done;done;done;done
+
+#H3N2
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=40GB
+#SBATCH --job-name=h3VariantToTable
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h3VariantToTable.err
+
+module purge
+module load gatk/3.8-0
+
+cd /scratch/mk6134/varcall/h3n2/comparison/raw-vcf
+
+for a in {1..107};do
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in snvs indels;do
+java -jar /share/apps/gatk/3.8-0/GenomeAnalysisTK.jar -R h3n2.fa -T VariantsToTable -F CHROM -F POS -F REF -F ALT -F QUAL -F DP -F AF -V $a.${b}-${c}.${d}.vcf  	-o $a.${b}.${c}.${d}.all.table;
+java -jar /share/apps/gatk/3.8-0/GenomeAnalysisTK.jar -R h3n2.fa -T VariantsToTable -F CHROM -F POS -F REF -F ALT -F QUAL -F DP -F AF -V $a.${b}-${c}.${d}.${e}.vcf   -o $a.${b}.${c}.${d}.${e}.table;
+mkdir /scratch/mk6134/varcall/h3n2/comparison/final-table
+cp ./$a.${b}.${c}.${d}.all.table /scratch/mk6134/varcall/h3n2/comparison/final-table
+cp ./$a.${b}.${c}.${d}.${e}.table /scratch/mk6134/varcall/h3n2/comparison/final-table
+done;done;done;done;done
+
+
+#########################################################
+##STEP2 - identification of intersecting/unique variant##
+
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=90GB
+#SBATCH --job-name=h1-compare
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h1-compare.err
+
+cd /scratch/mk6134/varcall/h1n1/comparison/final-table
+
+for a in {1..142};do
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in all snvs indels;do
+
+#variant-caller comparison
+#BT
+#FB
+#FB-GATK
+#FB-unique
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]'  $a.${b}.GATK.${d}.${e}.table $a.${b}.FB.${d}.${e}.table  > $a.${b}.FvG.uq.${d}.${e}.table;
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.${b}.SAM.${d}.${e}.table $a.${b}.FvG.uq.${d}.${e}.table > $a.${b}.FvGS.uq.${d}.${e}.table;
+#GATK-unique
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]'  $a.${b}.FB.${d}.${e}.table $a.${b}.GATK.${d}.${e}.table  > $a.${b}.GvF.uq.${d}.${e}.table;
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.${b}.SAM.${d}.${e}.table $a.${b}.GvF.uq.${d}.${e}.table > $a.${b}.GvFS.uq.${d}.${e}.table;
+#SAM-unique
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]'  $a.${b}.FB.${d}.${e}.table $a.${b}.SAM.${d}.${e}.table  > $a.${b}.SvF.uq.${d}.${e}.table;
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.${b}.GATK.${d}.${e}.table $a.${b}.SvF.uq.${d}.${e}.table > $a.${b}.SvFG.uq.${d}.${e}.table;
+
+#intersection by 2
+#FB-GATK-only
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}a[$1 FS $2 FS $4]' $a.${b}.FB.${d}.${e}.table $a.${b}.GATK.${d}.${e}.table > $a.${b}.FnG.${d}.${e}.table;
+#excluding intersecting part with SAM
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.${b}.SAM.${d}.${e}.table $a.${b}.FnG.${d}.${e}.table > $a.${b}.FnGvS.${d}.${e}.table;
+
+#FB-SAM-only
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}a[$1 FS $2 FS $4]' $a.${b}.FB.${d}.${e}.table $a.${b}.SAM.${d}.${e}.table > $a.${b}.FnS.${d}.${e}.table;
+#excluding intersecting part with GATK
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.${b}.GATK.${d}.${e}.table $a.${b}.FnS.${d}.${e}.table > $a.${b}.FnSvG.${d}.${e}.table;
+
+#GATK-SAM-only
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}a[$1 FS $2 FS $4]' $a.${b}.GATK.${d}.${e}.table $a.${b}.SAM.${d}.${e}.table > $a.${b}.GnS.${d}.${e}.table;
+#excluding intersecting part with GATK
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.${b}.FB.${d}.${e}.table $a.${b}.GnS.${d}.${e}.table > $a.${b}.GnSvF.${d}.${e}.table;
+
+#intersection by 3
+#FB-GATKintersection
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}a[$1 FS $2 FS $4]' $a.${b}.SAM.${d}.${e}.table $a.${b}.FnG.${d}.${e}.table > $a.${b}.FnGnS.${d}.${e}.table;
+
+#intersection by 6
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}a[$1 FS $2 FS $4]' $a.BT.FnGnS.${d}.${e}.table $a.BW.FnGnS.${d}.${e}.table > $a.TnW.FnGnS.${d}.${e}.table;
+
+
+#aligner comparison
+
+#BT-unique
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.BW.${c}.${d}.${e}.table $a.BT.${c}.${d}.${e}.table > $a.TvW.uq.${c}.${d}.${e}.table;
+#BW-unique
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.BT.${c}.${d}.${e}.table $a.BW.${c}.${d}.${e}.table > $a.WvT.uq.${c}.${d}.${e}.table;
+#BT-BW-intersection
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}a[$1 FS $2 FS $4]' $a.BW.${c}.${d}.${e}.table $a.BT.${c}.${d}.${e}.table > $a.TnW.uq.${c}.${d}.${e}.table;
+
+done;done;done;done;done
+
+#h3n2-comparison
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=90GB
+#SBATCH --job-name=h3-compare
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h3-compare.err
+
+cd /scratch/mk6134/varcall/h3n2/comparison/final-table
+
+for a in {1..107};do
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in all snvs indels;do
+
+#variant-caller comparison
+
+#FB-unique
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]'  $a.${b}.GATK.${d}.${e}.table $a.${b}.FB.${d}.${e}.table  > $a.${b}.FvG.uq.${d}.${e}.table;
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.${b}.SAM.${d}.${e}.table $a.${b}.FvG.uq.${d}.${e}.table > $a.${b}.FvGS.uq.${d}.${e}.table;
+#GATK-unique
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]'  $a.${b}.FB.${d}.${e}.table $a.${b}.GATK.${d}.${e}.table  > $a.${b}.GvF.uq.${d}.${e}.table;
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.${b}.SAM.${d}.${e}.table $a.${b}.GvF.uq.${d}.${e}.table > $a.${b}.GvFS.uq.${d}.${e}.table;
+#SAM-unique
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]'  $a.${b}.FB.${d}.${e}.table $a.${b}.SAM.${d}.${e}.table  > $a.${b}.SvF.uq.${d}.${e}.table;
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.${b}.GATK.${d}.${e}.table $a.${b}.SvF.uq.${d}.${e}.table > $a.${b}.SvFG.uq.${d}.${e}.table;
+
+#intersection by 2
+#FB-GATK-only
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}a[$1 FS $2 FS $4]' $a.${b}.FB.${d}.${e}.table $a.${b}.GATK.${d}.${e}.table > $a.${b}.FnG.${d}.${e}.table;
+#excluding intersecting part with SAM
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.${b}.SAM.${d}.${e}.table $a.${b}.FnG.${d}.${e}.table > $a.${b}.FnGvS.${d}.${e}.table;
+
+#FB-SAM-only
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}a[$1 FS $2 FS $4]' $a.${b}.FB.${d}.${e}.table $a.${b}.SAM.${d}.${e}.table > $a.${b}.FnS.${d}.${e}.table;
+#excluding intersecting part with GATK
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.${b}.GATK.${d}.${e}.table $a.${b}.FnS.${d}.${e}.table > $a.${b}.FnSvG.${d}.${e}.table;
+
+#GATK-SAM-only
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}a[$1 FS $2 FS $4]' $a.${b}.GATK.${d}.${e}.table $a.${b}.SAM.${d}.${e}.table > $a.${b}.GnS.${d}.${e}.table;
+#excluding intersecting part with GATK
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.${b}.FB.${d}.${e}.table $a.${b}.GnS.${d}.${e}.table > $a.${b}.GnSvF.${d}.${e}.table;
+
+#intersection by 3
+#FB-GATKintersection
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}a[$1 FS $2 FS $4]' $a.${b}.SAM.${d}.${e}.table $a.${b}.FnG.${d}.${e}.table > $a.${b}.FnGnS.${d}.${e}.table;
+
+#intersection by 6
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}a[$1 FS $2 FS $4]' $a.BT.FnGnS.${d}.${e}.table $a.BW.FnGnS.${d}.${e}.table > $a.TnW.FnGnS.${d}.${e}.table;
+
+
+#aligner comparison
+
+#BT-unique
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.BW.${c}.${d}.${e}.table $a.BT.${c}.${d}.${e}.table > $a.TvW.uq.${c}.${d}.${e}.table;
+#BW-unique
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}!a[$1 FS $2 FS $4]' $a.BT.${c}.${d}.${e}.table $a.BW.${c}.${d}.${e}.table > $a.WvT.uq.${c}.${d}.${e}.table;
+#BT-BW-intersection
+awk 'NR==FNR{a[$1 FS $2 FS $4]++;next}a[$1 FS $2 FS $4]' $a.BW.${c}.${d}.${e}.table $a.BT.${c}.${d}.${e}.table > $a.TnW.uq.${c}.${d}.${e}.table;
+
+done;done;done;done;done
+
+
+
+#################################
+###STEP3-removing header#########
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=90GB
+#SBATCH --job-name=h1-rmhd+sample
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h1-rmhd+sample.err
+
+cd /scratch/mk6134/varcall/h1n1/comparison/final-table
+
+
+for a in {1..142};do
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in all snvs indels;do 
+#input file#
+sed '1d' $a.${b}.FvGS.uq.${d}.${e}.table > $a.${b}.FvGS.uq.${d}.${e}.nh.table
+sed '1d' $a.${b}.GvFS.uq.${d}.${e}.table > $a.${b}.GvFS.uq.${d}.${e}.nh.table
+sed '1d' $a.${b}.SvFG.uq.${d}.${e}.table > $a.${b}.SvFG.uq.${d}.${e}.nh.table
+sed '1d' $a.${b}.FnG.uq.${d}.${e}.table  > $a.${b}.FnG.uq.${d}.${e}.nh.table 
+sed '1d' $a.${b}.FnS.uq.${d}.${e}.table  > $a.${b}.FnS.uq.${d}.${e}.nh.table 
+sed '1d' $a.${b}.GnS.uq.${d}.${e}.table  > $a.${b}.GnS.uq.${d}.${e}.nh.table 
+sed '1d' $a.${b}.FnGnS.${d}.${e}.table   > $a.${b}.FnGnS.${d}.${e}.nh.table  
+sed '1d' $a.TnW.FnGnS.${d}.${e}.table    > $a.TnW.FnGnS.${d}.${e}.nh.table   
+sed '1d' $a.TvW.uq.${c}.${d}.${e}.table  > $a.TvW.uq.${c}.${d}.${e}.nh.table 
+sed '1d' $a.WvT.uq.${c}.${d}.${e}.table  > $a.WvT.uq.${c}.${d}.${e}.nh.table 
+sed '1d' $a.TnW.uq.${c}.${d}.${e}.table  > $a.TnW.uq.${c}.${d}.${e}.nh.table 
+#add sample number
+sed "s/^/$a\t/" $a.${b}.FvGS.uq.${d}.${e}.nh.table > $a.${b}.FvGS.uq.${d}.${e}.txt
+sed "s/^/$a\t/" $a.${b}.GvFS.uq.${d}.${e}.nh.table > $a.${b}.GvFS.uq.${d}.${e}.txt
+sed "s/^/$a\t/" $a.${b}.SvFG.uq.${d}.${e}.nh.table > $a.${b}.SvFG.uq.${d}.${e}.txt
+sed "s/^/$a\t/" $a.${b}.FnG.uq.${d}.${e}.nh.table  > $a.${b}.FnG.uq.${d}.${e}.txt
+sed "s/^/$a\t/" $a.${b}.FnS.uq.${d}.${e}.nh.table  > $a.${b}.FnS.uq.${d}.${e}.txt
+sed "s/^/$a\t/" $a.${b}.GnS.uq.${d}.${e}.nh.table  > $a.${b}.GnS.uq.${d}.${e}.txt
+sed "s/^/$a\t/" $a.${b}.FnGnS.${d}.${e}.nh.table   > $a.${b}.FnGnS.${d}.${e}.txt
+sed "s/^/$a\t/" $a.TnW.FnGnS.${d}.${e}.nh.table    > $a.TnW.FnGnS.${d}.${e}.txt
+sed "s/^/$a\t/" $a.TvW.uq.${c}.${d}.${e}.nh.table  > $a.TvW.uq.${c}.${d}.${e}.txt
+sed "s/^/$a\t/" $a.WvT.uq.${c}.${d}.${e}.nh.table  > $a.WvT.uq.${c}.${d}.${e}.txt
+sed "s/^/$a\t/" $a.TnW.uq.${c}.${d}.${e}.nh.table  > $a.TnW.uq.${c}.${d}.${e}.txt
+done;done;done;done;done
+
+
+#h3n2
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=90GB
+#SBATCH --job-name=h3-rmhd+sample
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h3-rmhd+sample.err
+
+cd /scratch/mk6134/varcall/h3n2/comparison/final-table
+
+
+for a in {1..107};do
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in all snvs indels;do 
+#input file#
+sed '1d' $a.${b}.FvGS.uq.${d}.${e}.table > $a.${b}.FvGS.uq.${d}.${e}.nh.table
+sed '1d' $a.${b}.GvFS.uq.${d}.${e}.table > $a.${b}.GvFS.uq.${d}.${e}.nh.table
+sed '1d' $a.${b}.SvFG.uq.${d}.${e}.table > $a.${b}.SvFG.uq.${d}.${e}.nh.table
+sed '1d' $a.${b}.FnG.uq.${d}.${e}.table  > $a.${b}.FnG.uq.${d}.${e}.nh.table 
+sed '1d' $a.${b}.FnS.uq.${d}.${e}.table  > $a.${b}.FnS.uq.${d}.${e}.nh.table 
+sed '1d' $a.${b}.GnS.uq.${d}.${e}.table  > $a.${b}.GnS.uq.${d}.${e}.nh.table 
+sed '1d' $a.${b}.FnGnS.${d}.${e}.table   > $a.${b}.FnGnS.${d}.${e}.nh.table  
+sed '1d' $a.TnW.FnGnS.${d}.${e}.table    > $a.TnW.FnGnS.${d}.${e}.nh.table   
+sed '1d' $a.TvW.uq.${c}.${d}.${e}.table  > $a.TvW.uq.${c}.${d}.${e}.nh.table 
+sed '1d' $a.WvT.uq.${c}.${d}.${e}.table  > $a.WvT.uq.${c}.${d}.${e}.nh.table 
+sed '1d' $a.TnW.uq.${c}.${d}.${e}.table  > $a.TnW.uq.${c}.${d}.${e}.nh.table 
+#add sample number
+sed "s/^/$a\t/" $a.${b}.FvGS.uq.${d}.${e}.nh.table > $a.${b}.FvGS.uq.${d}.${e}.txt
+sed "s/^/$a\t/" $a.${b}.GvFS.uq.${d}.${e}.nh.table > $a.${b}.GvFS.uq.${d}.${e}.txt
+sed "s/^/$a\t/" $a.${b}.SvFG.uq.${d}.${e}.nh.table > $a.${b}.SvFG.uq.${d}.${e}.txt
+sed "s/^/$a\t/" $a.${b}.FnG.uq.${d}.${e}.nh.table  > $a.${b}.FnG.uq.${d}.${e}.txt
+sed "s/^/$a\t/" $a.${b}.FnS.uq.${d}.${e}.nh.table  > $a.${b}.FnS.uq.${d}.${e}.txt
+sed "s/^/$a\t/" $a.${b}.GnS.uq.${d}.${e}.nh.table  > $a.${b}.GnS.uq.${d}.${e}.txt
+sed "s/^/$a\t/" $a.${b}.FnGnS.${d}.${e}.nh.table   > $a.${b}.FnGnS.${d}.${e}.txt
+sed "s/^/$a\t/" $a.TnW.FnGnS.${d}.${e}.nh.table    > $a.TnW.FnGnS.${d}.${e}.txt
+sed "s/^/$a\t/" $a.TvW.uq.${c}.${d}.${e}.nh.table  > $a.TvW.uq.${c}.${d}.${e}.txt
+sed "s/^/$a\t/" $a.WvT.uq.${c}.${d}.${e}.nh.table  > $a.WvT.uq.${c}.${d}.${e}.txt
+sed "s/^/$a\t/" $a.TnW.uq.${c}.${d}.${e}.nh.table  > $a.TnW.uq.${c}.${d}.${e}.txt
+done;done;done;done;done
+
+
+
+
+
+########################################################
+##step4 - concatenation by pipeline and covert to csv###
+
+
+#h1n1
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=80GB
+#SBATCH --job-name=h1-con
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h1-con.err
+
+cd /scratch/mk6134/varcall/h1n1/comparison/final-table
+
+for a in {1..142};do
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in all snvs indels;do
+#FB
+cat $a.${b}.FvGS.uq.${d}.${e}.txt >> ${b}.FvGS.uq.${d}.${e}.txt;
+#GATK
+cat $a.${b}.GvFS.uq.${d}.${e}.txt >> ${b}.GvFS.uq.${d}.${e}.txt;
+#SAM
+cat $a.${b}.SvFG.uq.${d}.${e}.txt >> ${b}.SvFG.uq.${d}.${e}.txt;
+#FB-GATK
+cat $a.${b}.FnG.uq.${d}.${e}.txt >> ${b}.FnG.uq.${d}.${e}.txt;
+#FB-SAM
+cat $a.${b}.FnS.uq.${d}.${e}.txt >> ${b}.FnS.uq.${d}.${e}.txt;
+#GATK-SAM
+cat $a.${b}.GnS.uq.${d}.${e}.txt >> ${b}.GnS.uq.${d}.${e}.txt;
+#FB-GATK-SAM
+cat $a.${b}.FnGnS.${d}.${e}.txt >> ${b}.FnGnS.${d}.${e}.txt;
+#6 intersection
+cat $a.TnW.FnGnS.${d}.${e}.txt >> TnW.FnGnS.${d}.${e}.txt;
+
+#aln
+cat $a.TvW.uq.${c}.${d}.${e}.txt >> TvW.uq.${c}.${d}.${e}.txt;
+cat $a.WvT.uq.${c}.${d}.${e}.txt >> WvT.uq.${c}.${d}.${e}.txt;
+cat $a.TnW.uq.${c}.${d}.${e}.txt >> TnW.uq.${c}.${d}.${e}.txt;
+done;done;done;done;done
+
+#h3n2
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=80GB
+#SBATCH --job-name=h3-con
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h3-con.err
+
+cd /scratch/mk6134/varcall/h3n2/comparison/final-table
+
+for a in {1..107};do
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in all snvs indels;do
+#FB
+cat $a.${b}.FvGS.uq.${d}.${e}.txt >> ${b}.FvGS.uq.${d}.${e}.txt;
+#GATK
+cat $a.${b}.GvFS.uq.${d}.${e}.txt >> ${b}.GvFS.uq.${d}.${e}.txt;
+#SAM
+cat $a.${b}.SvFG.uq.${d}.${e}.txt >> ${b}.SvFG.uq.${d}.${e}.txt;
+#FB-GATK
+cat $a.${b}.FnG.uq.${d}.${e}.txt >> ${b}.FnG.uq.${d}.${e}.txt;
+#FB-SAM
+cat $a.${b}.FnS.uq.${d}.${e}.txt >> ${b}.FnS.uq.${d}.${e}.txt;
+#GATK-SAM
+cat $a.${b}.GnS.uq.${d}.${e}.txt >> ${b}.GnS.uq.${d}.${e}.txt;
+#FB-GATK-SAM
+cat $a.${b}.FnGnS.${d}.${e}.txt >> ${b}.FnGnS.${d}.${e}.txt;
+#6 intersection
+cat $a.TnW.FnGnS.${d}.${e}.txt >> TnW.FnGnS.${d}.${e}.txt;
+
+#aln
+cat $a.TvW.uq.${c}.${d}.${e}.txt >> TvW.uq.${c}.${d}.${e}.txt;
+cat $a.WvT.uq.${c}.${d}.${e}.txt >> WvT.uq.${c}.${d}.${e}.txt;
+cat $a.TnW.uq.${c}.${d}.${e}.txt >> TnW.uq.${c}.${d}.${e}.txt;
+
+done;done;done;done;done
+
+
+###########################
+#step5 - from txt to csv###
+#h1n1
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=80GB
+#SBATCH --job-name=h1-csv
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h1-csv.err
+
+cd /scratch/mk6134/varcall/h1n1/comparison/final-table
+
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in all snvs indels;do
+#FB
+cat ${b}.FvGS.uq.${d}.${e}.txt | tr -s '[:blank:]' ',' > ${b}.FvGS.uq.${d}.${e}.csv;
+#GATK
+cat ${b}.GvFS.uq.${d}.${e}.txt | tr -s '[:blank:]' ',' > ${b}.GvFS.uq.${d}.${e}.csv;
+#SAM
+cat ${b}.SvFG.uq.${d}.${e}.txt | tr -s '[:blank:]' ',' > ${b}.SvFG.uq.${d}.${e}.csv;
+#FB-GATK
+cat ${b}.FnG.uq.${d}.${e}.txt  | tr -s '[:blank:]' ',' > ${b}.FnG.uq.${d}.${e}.csv;
+#FB-SAM
+cat ${b}.FnS.uq.${d}.${e}.txt  | tr -s '[:blank:]' ',' > ${b}.FnS.uq.${d}.${e}.csv;
+#GATK-SAM
+cat ${b}.GnS.uq.${d}.${e}.txt  | tr -s '[:blank:]' ',' > ${b}.GnS.uq.${d}.${e}.csv;
+#FB-GATK-SAM
+cat ${b}.FnGnS.${d}.${e}.txt   | tr -s '[:blank:]' ',' > ${b}.FnGnS.${d}.${e}.csv;
+#aln
+cat TvW.uq.${c}.${d}.${e}.txt | tr -s '[:blank:]' ',' > TvW.uq.${c}.${d}.${e}.csv;
+cat WvT.uq.${c}.${d}.${e}.txt | tr -s '[:blank:]' ',' > WvT.uq.${c}.${d}.${e}.csv;
+cat TnW.uq.${c}.${d}.${e}.txt | tr -s '[:blank:]' ',' > TnW.uq.${c}.${d}.${e}.csv;
+done;done;done;done
+
+#6 intersection
+for d in raw flt;do
+for e in all snvs indels;do
+cat TnW.FnGnS.${d}.${e}.txt | tr -s '[:blank:]' ',' > TnW.FnGnS.6.${d}.${e}.csv
+done;done;
+
+#h3n2
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=80GB
+#SBATCH --job-name=h3-csv
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h3-csv.err
+
+
+cd /scratch/mk6134/varcall/h3n2/comparison/final-table
+
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in all snvs indels;do
+#FB
+cat ${b}.FvGS.uq.${d}.${e}.txt | tr -s '[:blank:]' ',' > ${b}.FvGS.uq.${d}.${e}.csv;
+#GATK
+cat ${b}.GvFS.uq.${d}.${e}.txt | tr -s '[:blank:]' ',' > ${b}.GvFS.uq.${d}.${e}.csv;
+#SAM
+cat ${b}.SvFG.uq.${d}.${e}.txt | tr -s '[:blank:]' ',' > ${b}.SvFG.uq.${d}.${e}.csv;
+#FB-GATK
+cat ${b}.FnG.uq.${d}.${e}.txt  | tr -s '[:blank:]' ',' > ${b}.FnG.uq.${d}.${e}.csv;
+#FB-SAM
+cat ${b}.FnS.uq.${d}.${e}.txt  | tr -s '[:blank:]' ',' > ${b}.FnS.uq.${d}.${e}.csv;
+#GATK-SAM
+cat ${b}.GnS.uq.${d}.${e}.txt  | tr -s '[:blank:]' ',' > ${b}.GnS.uq.${d}.${e}.csv;
+#FB-GATK-SAM
+cat ${b}.FnGnS.${d}.${e}.txt   | tr -s '[:blank:]' ',' > ${b}.FnGnS.${d}.${e}.csv;
+#aln
+cat TvW.uq.${c}.${d}.${e}.txt | tr -s '[:blank:]' ',' > TvW.uq.${c}.${d}.${e}.csv;
+cat WvT.uq.${c}.${d}.${e}.txt | tr -s '[:blank:]' ',' > WvT.uq.${c}.${d}.${e}.csv;
+cat TnW.uq.${c}.${d}.${e}.txt | tr -s '[:blank:]' ',' > TnW.uq.${c}.${d}.${e}.csv;
+done;done;done;done
+
+######################################################
+##extra-step : total number of variants per pipeline##
+######################################################
+
+#h1n1
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=90GB
+#SBATCH --job-name=h1-total
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h1-total.err
+
+
+cd /scratch/mk6134/varcall/h1n1/comparison/final-table
+
+for a in {1..142};do
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in all snvs indels;do
+
+#remove header
+sed '1d' $a.${b}.${c}.${d}.${e}.table  > $a.${b}.${c}.${d}.${e}.total.var.nh.table;
+#add sample number
+sed "s/^/$a\t/" $a.${b}.${c}.${d}.${e}.total.var.nh.table > $a.${b}.${c}.${d}.${e}.total.var.txt;
+#concatenation
+cat $a.${b}.${c}.${d}.${e}.total.var.txt >> ${b}.${c}.${d}.${e}.total.var.txt;
+#csv conversion
+cat ${b}.${c}.${d}.${e}.total.var.txt | tr -s '[:blank:]' ',' > ${b}.${c}.${d}.${e}.total.var.csv
+done;done;done;done;done  
+
+#h3n2
+
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=90GB
+#SBATCH --job-name=h3-total
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h3-total.err
+
+cd /scratch/mk6134/varcall/h3n2/comparison/final-table
+
+for a in {1..107};do
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in all snvs indels;do
+
+#remove header
+sed '1d' $a.${b}.${c}.${d}.${e}.table  > $a.${b}.${c}.${d}.${e}.total.var.nh.table;
+#add sample number
+sed "s/^/$a\t/" $a.${b}.${c}.${d}.${e}.total.var.nh.table > $a.${b}.${c}.${d}.${e}.total.var.txt;
+#concatenation
+cat $a.${b}.${c}.${d}.${e}.total.var.txt >> ${b}.${c}.${d}.${e}.total.var.txt;
+#csv conversion
+cat ${b}.${c}.${d}.${e}.total.var.txt | tr -s '[:blank:]' ',' > ${b}.${c}.${d}.${e}.total.var.csv
+done;done;done;done;done  
+
+
+#extra-step-2 : assembly : after making info columns aggragate all the csv at one file#
+
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=90GB
+#SBATCH --job-name=h1-csv-con
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h1-csv-con.err
+
+cd /scratch/mk6134/varcall/h1n1/comparison/final-table 
+
+#h1n1
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in all snvs indels;do
+#input#
+#1.total variant
+sed "s/^/h1n1,$b,$c,$d,$e\,/" ${b}.${c}.${d}.${e}.total.var.csv > ${b}.${c}.${d}.${e}.total.var.info.csv;
+#2.
+#FB
+sed "s/^/h1n1,$b,FvGS,$d,$e\,/" ${b}.FvGS.uq.${d}.${e}.csv > ${b}.FvGS.uq.${d}.${e}.info.csv
+#GATK
+sed "s/^/h1n1,$b,GvFS,$d,$e\,/" ${b}.GvFS.uq.${d}.${e}.csv > ${b}.GvFS.uq.${d}.${e}.info.csv
+#SAM
+sed "s/^/h1n1,$b,SvFG,$d,$e\,/" ${b}.SvFG.uq.${d}.${e}.csv > ${b}.SvFG.uq.${d}.${e}.info.csv
+#FB-GATK-SAMx
+sed "s/^/h1n1,$b,FnGvS,$d,$e\,/" ${b}.FnG.uq.${d}.${e}.csv > ${b}.FnGvS.uq.${d}.${e}.info.csv
+#FB-SAM-GATKx
+sed "s/^/h1n1,$b,FnSvG,$d,$e\,/" ${b}.FnS.uq.${d}.${e}.csv > ${b}.FnSvG.uq.${d}.${e}.info.csv
+#GATK-SAM-FBx
+sed "s/^/h1n1,$b,GnSvF,$d,$e\,/" ${b}.GnS.uq.${d}.${e}.csv > ${b}.GnSvF.uq.${d}.${e}.info.csv
+#FB-GATK-SAM
+sed "s/^/h1n1,$b,FnGnS,$d,$e\,/" ${b}.FnGnS.${d}.${e}.csv > ${b}.FnGnS.${d}.${e}.info.csv
+#6-intersecting
+sed "s/^/h1n1,TnW,FnGnS,$d,$e\,/" TnW.FnGnS.6.${d}.${e}.csv > TnW.FnGnS.6.${d}.${e}.info.csv
+#aln
+sed "s/^/h1n1,TvW,$c,$d,$e\,/" TvW.uq.${c}.${d}.${e}.csv > TvW.uq.${c}.${d}.${e}.info.csv
+sed "s/^/h1n1,WvT,$c,$d,$e\,/" WvT.uq.${c}.${d}.${e}.csv > WvT.uq.${c}.${d}.${e}.info.csv
+sed "s/^/h1n1,TnW,$c,$d,$e\,/" TnW.uq.${c}.${d}.${e}.csv > TnW.uq.${c}.${d}.${e}.info.csv
+
+cat *info.csv >> h1.allinone.csv;
+done;done;done;done
+
+
+
+#h3n2
+
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --mem=90GB
+#SBATCH --job-name=h3-csv-con
+#SBATCH --mail-type=END
+#SBATCH --mail-user=mk6134@nyu.edu
+#SBATCH --output=slurm_%j.out
+#SBATCH --error=h3-csv-con.err
+
+cd /scratch/mk6134/varcall/h3n2/comparison/final-table 
+
+
+#h3n2
+for b in BT BW;do
+for c in FB SAM GATK;do
+for d in raw flt;do
+for e in all snvs indels;do
+
+#input#
+#1.total variant
+sed "s/^/h3n2,$b,$c,$d,$e\,/" ${b}.${c}.${d}.${e}.total.var.csv > ${b}.${c}.${d}.${e}.total.var.info.csv;
+#2.
+#FB
+sed "s/^/h3n2,$b,FvGS,$d,$e\,/" ${b}.FvGS.uq.${d}.${e}.csv > ${b}.FvGS.uq.${d}.${e}.info.csv
+#GATK
+sed "s/^/h3n2,$b,GvFS,$d,$e\,/" ${b}.GvFS.uq.${d}.${e}.csv > ${b}.GvFS.uq.${d}.${e}.info.csv
+#SAM
+sed "s/^/h3n2,$b,SvFG,$d,$e\,/" ${b}.SvFG.uq.${d}.${e}.csv > ${b}.SvFG.uq.${d}.${e}.info.csv
+#FB-GATK-SAMx
+sed "s/^/h3n2,$b,FnGvS,$d,$e\,/" ${b}.FnG.uq.${d}.${e}.csv > ${b}.FnGvS.uq.${d}.${e}.info.csv
+#FB-SAM-GATKx
+sed "s/^/h3n2,$b,FnSvG,$d,$e\,/" ${b}.FnS.uq.${d}.${e}.csv > ${b}.FnSvG.uq.${d}.${e}.info.csv
+#GATK-SAM-FBx
+sed "s/^/h3n2,$b,GnSvF,$d,$e\,/" ${b}.GnS.uq.${d}.${e}.csv > ${b}.GnSvF.uq.${d}.${e}.info.csv
+#FB-GATK-SAM
+sed "s/^/h3n2,$b,FnGnS,$d,$e\,/" ${b}.FnGnS.${d}.${e}.csv > ${b}.FnGnS.${d}.${e}.info.csv
+#6-intersecting
+sed "s/^/h3n2,TnW,FnGnS,$d,$e\,/" TnW.FnGnS.6.${d}.${e}.csv > TnW.FnGnS.6.${d}.${e}.info.csv
+#aln
+sed "s/^/h3n2,TvW,$c,$d,$e\,/" TvW.uq.${c}.${d}.${e}.csv > TvW.uq.${c}.${d}.${e}.info.csv
+sed "s/^/h3n2,WvT,$c,$d,$e\,/" WvT.uq.${c}.${d}.${e}.csv > WvT.uq.${c}.${d}.${e}.info.csv
+sed "s/^/h3n2,TnW,$c,$d,$e\,/" TnW.uq.${c}.${d}.${e}.csv > TnW.uq.${c}.${d}.${e}.info.csv
