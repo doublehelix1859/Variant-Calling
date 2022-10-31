@@ -23,3 +23,4 @@ An Overview of Variant-calling pipelines
 
 
 (An detailed comparison Method is explained in my thesis: Comparison of variant-calling pipelines for the genomic analysis of Influenza A Virus)
+(File: Kim_Minju_Thesis.pdf)
